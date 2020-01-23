@@ -1,4 +1,4 @@
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 import voluptuous as vol
 
 APP_FH = 'group_all'
@@ -12,12 +12,13 @@ CONF_DOMAINS = 'domains'
 CONF_NAME = 'name'
 CONF_DOMAIN = 'domain'
 CONF_LOG_LEVEL = 'log_level'
-CONF_TRACK_NEW_DOMAINS = 'track_new_domains'
 CONF_TRACK_NEW_ENTITIES = 'track_new_entities'
 CONF_FRIENDLY_NAME = 'friendly_name'
 CONF_ENTITY_ID = 'entity_id'
 CONF_OBJECT_ID = 'object_id'
 CONF_ENTITIES = 'entities'
+CONF_GROUP_CONFIG = 'group_config'
+
 
 # known domain names
 
@@ -38,7 +39,6 @@ CONF_REMEMBER_THE_MILK_ACCOUNT = 'remember_the_milk_account'
 # Options
 OPTION_ALL = 'all'
 OPTION_LEGACY = 'legacy'
-OPTION_NONE = 'none'
 OPTION_CONFIGURED = 'configured'
 
 # legacy domains
@@ -67,26 +67,23 @@ CONF_UNIQUE_FRIENDLY_NAMES = {
 ERROR = 'ERROR'
 DEBUG = 'DEBUG'
 INFO = 'INFO'
+WARNING = 'WARNING'
 
 #Schemas
 
-GROUP_SCHEMA = [
-    vol.Any(
-        str,
-        {
-            vol.Required(CONF_DOMAIN): str,
-            vol.Optional(CONF_NAME): str,
-        }
-    )
-]
+GROUP_SCHEMA = {
+    vol.Optional(str): {
+        vol.Required(CONF_NAME): str,
+        },
+    }
 
 APP_SCHEMA = vol.Schema({
     vol.Required(CONF_MODULE): APP_FH,
     vol.Required(CONF_CLASS): APP_CLASS,
-    vol.Optional(CONF_DOMAINS, default=OPTION_LEGACY): vol.Any(OPTION_ALL, OPTION_LEGACY, GROUP_SCHEMA),
+    vol.Optional(CONF_DOMAINS, default=OPTION_LEGACY): vol.Any(OPTION_ALL, OPTION_LEGACY, [str]),
     vol.Optional(CONF_LOG_LEVEL, default=DEBUG): vol.Any(DEBUG, INFO),
-    vol.Optional(CONF_TRACK_NEW_DOMAINS, default=OPTION_LEGACY): vol.Any(OPTION_LEGACY, OPTION_ALL, OPTION_NONE),
     vol.Optional(CONF_TRACK_NEW_ENTITIES, default=True): bool,
+    vol.Optional(CONF_GROUP_CONFIG, default={}): GROUP_SCHEMA,
 })
 
 class GroupAll(hass.Hass):
@@ -100,46 +97,39 @@ class GroupAll(hass.Hass):
         self._track_entities = args.get(CONF_TRACK_NEW_ENTITIES)
 
         # find out if there is an override list of configured domains.
-        configured = args.get(CONF_DOMAINS)
-        included = None
+        self._overrides = overrides = args.get(CONF_GROUP_CONFIG)
 
-        if isinstance(configured, list):
-            included = {}
-            for include in configured:
-                include = ConfDomain(include)
-                included[include.domain] = include
-            configured = OPTION_CONFIGURED
-
-        # decide to what groups to make
-        self._track = track_domains = args.get(CONF_TRACK_NEW_DOMAINS)
+        self._track = args.get(CONF_DOMAINS)
+        if isinstance(self._track, list):
+            configured = self._track
+            self._track = OPTION_CONFIGURED
 
         self._groups = {}
-        if configured == OPTION_ALL:
+        if self._track == OPTION_ALL:
             # Adding all current domains that exist.
-            self.add_groups(included)
-
-        elif configured == OPTION_LEGACY:
+            self.add_groups()
+        elif self._track == OPTION_LEGACY:
             # Adding all legacy domains that exist.
-            self.add_groups(included, CONF_LEGACY_DOMAINS)
-        else:
-            # Adding all configured domains that exist.
-            if track_domains == OPTION_ALL:
-                filter = None
-            elif track_domains == OPTION_LEGACY:
-                filter = CONF_LEGACY_DOMAINS
-            else:
-                filter = [ g.domain for g in included.values() ]
-            self.add_groups(included, filter)
+            self.add_groups(CONF_LEGACY_DOMAINS)
+        elif self._track == OPTION_CONFIGURED:
+            self.add_groups(self._track)
 
-        # Create state listener.
+            # warn user if overridden domains do not exist
+            for domain in configured:
+                if domain not in self._groups.keys():
+                    self.log(f"'{domain}' does not exist in Home Assistant", level = WARNING)
 
-        self.handle = None
-        if track_domains != OPTION_NONE or self._track_entities:
-            # Listener to create new everything on state changes.
-            self.applog("creating listen state handle.")
-            self.handle = self.listen_state(self.track_new_items)
+        self.handles = {}
 
-    def add_groups(self, included=None, filtered=None):
+        # Create state listeners.
+        if self._track_entities:
+            domains = CONF_LEGACY_DOMAINS if self._track == OPTION_LEGACY else [ g.domain for g in self._groups.values() ]
+            for domain in domains:
+                # Listener to create new everything on state changes.
+                self.applog(f"creating '{domain}' listen state handle.")
+                self.handles[domain] = self.listen_state(self.track_new_items, domain)
+
+    def add_groups(self, filtered=None):
         """ Adds a group to home assistant at startup of app."""
         for entity_id in self.get_state().keys():
             domain = self.get_domain(entity_id)
@@ -151,28 +141,17 @@ class GroupAll(hass.Hass):
                     add = domain in filtered
                 # are we adding the domain?
                 if add:
-                    # Did we specifically configure domains?
-                    if included is not None:
-                        if domain in included:
-                            include = included[domain]
-                            self.add_tracked_domain(include.domain, include.name)
-                        else:
-                            self.add_tracked_domain(domain)
+                    # Did we specifically configure domain names?
+                    if domain in self._overrides:
+                        name = self._overrides[domain].get(CONF_NAME)
+                        self.add_tracked_domain(domain, name)
                     else:
                         self.add_tracked_domain(domain)
 
     def get_domain(self, entity_id): return entity_id.split('.')[0]
 
     def applog(self, msg):
-        if self._track == OPTION_NONE and self._track_entities:
-            tracking = CONF_ENTITY_ID
-        elif self._track_entities:
-            tracking = f"{self._track} {CONF_ENTITY_ID}"
-        elif self._track == OPTION_NONE:
-            tracking = "no"
-        else:
-            tracking = self._track
-        self.log(f"({tracking} tracking) {msg.capitalize()}", self._level)
+        self.log(f"({self._track} domains) {msg.capitalize()}", level = self._level)
 
     def track_new_items(self, entity, attribute, old, new, kwargs):
         domain = self.get_domain(entity)
@@ -205,18 +184,9 @@ class GroupAll(hass.Hass):
         self.call_service('group/set', **group.service_data)
 
     def terminate(self):
-        if self.handle is not None:
-            self.log("Canceling listen state handle.", level = self._level)
-            self.cancel_listen_state(self.handle)
-
-class ConfDomain(object):
-    def __init__(self, config):
-        self.name = None
-        if isinstance(config, str):
-            self.domain = config
-        elif isinstance(config, dict):
-            self.domain = config.get(CONF_DOMAIN)
-            self.name = config.get(CONF_NAME)
+        for name, handle in self.handles.items():
+            self.log(f"Canceling '{name}' listen state handle.", level = self._level)
+            self.cancel_listen_state(handle)
 
 class AppGroup(object):
     def __init__(self, domain, name=None):
