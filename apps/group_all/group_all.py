@@ -1,4 +1,4 @@
-import hassapi as hass
+import appdaemon.plugins.hass.hassapi as hass
 import voluptuous as vol
 
 APP_FH = 'group_all'
@@ -112,7 +112,7 @@ class GroupAll(hass.Hass):
             # Adding all legacy domains that exist.
             self.add_groups(CONF_LEGACY_DOMAINS)
         elif self._track == OPTION_CONFIGURED:
-            self.add_groups(self._track)
+            self.add_groups(configured)
 
             # warn user if overridden domains do not exist
             for domain in configured:
