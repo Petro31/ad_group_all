@@ -32,7 +32,7 @@ Download the `group_all` directory from inside the `apps` directory here to your
 #### Legacy Configuration
 ```yaml
 # Creates all legacy groups.  All newly created entity_id's will be added to the correct legacy group.
-events:
+groups:
   module: group_all
   class: GroupAll
 ```
@@ -40,11 +40,10 @@ events:
 #### Only all switches
 ```yaml
 # Creates group.all_switches, the group will update when a new switch is added to home assistant.
-events:
+groups:
   module: group_all
   class: GroupAll
-  track_new_domains = none
-  domains:
+  domains: 
   - switch
 ```
 
@@ -54,16 +53,16 @@ events:
 # Renames group.all_switches to group.switch_master
 # Renames group.all_lights to group.light_master
 # Any new entity_id that is created will be added to the correct group.
-events:
+groups:
   module: group_all
   class: GroupAll
-  track_new_domains: all
+  domains: all
   track_new_entities: true
-  domains:
-  - domain: switch
-    name: Switch Master
-  - domain: light
-    name: Light Master
+  group_config:
+    switch:
+      name: Switch Master
+    light:
+      name: Light Master
   log_level: INFO
 ```
 
@@ -72,13 +71,12 @@ key | optional | type | default | description
 -- | -- | -- | -- | --
 `module` | False | string | group_all | The module name of the app.
 `class` | False | string | GroupAll | The name of the Class.
-`track_new_domains` | True | `'all'` &#124; `'legacy'` &#124; `'none'` | `'legacy'` | Dynamically adds new domains without user intervention.  `'all'` will add all new domains. `'legacy'` will add all new legacy domains. `'none'` will turn this off.
 `track_new_entities` | True | bool | `true` | Dynamically adds new entity_id's to the entity list of a domain group.
-`domains` | True | `'all'` &#124; `'legacy'` &#124; list | `'legacy'` | A list of domain names or domain objects.  `'all'` will create all available domains at startup.  `'legacy'` will create all avialable legacy domains.  Adding your own list will only create those domain groups.  If `'track_new_domains'` is set to `'all'` or `'legacy'`, these settings will only override the group friendly name.  
+`domains` | True | `'all'` &#124; `'legacy'` &#124; list | `'legacy'` | A list of domain names.  `'all'` will create all available domains at startup.  `'legacy'` will create all avialable legacy domains.  Adding your own list will only create those domain groups.
+`group_config`| True | map | | A map for domain names.
 `log_level` | True | `'INFO'` &#124; `'DEBUG'` | `'INFO'` | Switches log level.
 
-#### Domain Object Configuration
+#### Domain Map Configuration
 key | optional | type | default | description
 -- | -- | -- | -- | --
-`domain` | False | string | | The domain name.
-`name` | True | string | | Friendly Name of the created group.
+`name` | False | string | | Friendly Name of the created group.
