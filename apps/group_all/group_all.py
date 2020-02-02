@@ -8,6 +8,7 @@ APP_CLASS = 'GroupAll'
 
 CONF_MODULE = 'module'
 CONF_CLASS = 'class'
+CONF_PRIORITY = 'priority'
 CONF_DOMAINS = 'domains'
 CONF_NAME = 'name'
 CONF_DOMAIN = 'domain'
@@ -80,6 +81,7 @@ GROUP_SCHEMA = {
 APP_SCHEMA = vol.Schema({
     vol.Required(CONF_MODULE): APP_FH,
     vol.Required(CONF_CLASS): APP_CLASS,
+    vol.Optional(CONF_PRIORITY): vol.Any(float, int),
     vol.Optional(CONF_DOMAINS, default=OPTION_LEGACY): vol.Any(OPTION_ALL, OPTION_LEGACY, [str]),
     vol.Optional(CONF_LOG_LEVEL, default=DEBUG): vol.Any(DEBUG, INFO),
     vol.Optional(CONF_TRACK_NEW_ENTITIES, default=True): bool,
