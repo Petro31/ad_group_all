@@ -23,7 +23,7 @@ With the `legacy` configuration, this will restore all hidden `group.all_*` grou
 * group.calendar
 * group.remember_the_milk_accounts
 
-## Installation
+## Installation Procedure
 
 Download the `group_all` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `hacs` module.
 
