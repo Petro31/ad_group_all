@@ -25,6 +25,8 @@ With the `legacy` configuration, this will restore all hidden `group.all_*` grou
 
 ## Installation
 
+This requires `voluptuous` as a dependency.  Make sure it's included in the appdaemon addon configuration.
+
 Download the `group_all` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `hacs` module.
 
 ## Example App configuration
